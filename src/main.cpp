@@ -98,21 +98,52 @@ int main() {
           * Both are in between [-1, 1].
           *
           */
-          double steer_value;
-          double throttle_value;
+
+          vector<double> waypoints_x_vals;
+          vector<double> waypoints_y_vals;
+
+          // https://discussions.udacity.com/t/waypoints-going-crazy/270597/2?u=maaquib
+          for (int i = 0; i < ptsx.size(); ++i) {
+            waypoints_x_vals.push_back(cos(-psi) * (ptsx[i] - px)
+                                  - sin(-psi) * (ptsy[i] - py));
+            waypoints_y_vals.push_back(sin(-psi) * (ptsx[i] - px)
+                                  + cos(-psi) * (ptsy[i] - py));
+          }
+
+          Eigen::Map<Eigen::VectorXd> waypoints_x_eigen(&waypoints_x_vals[0], waypoints_x_vals.size());
+          Eigen::Map<Eigen::VectorXd> waypoints_y_eigen(&waypoints_y_vals[0], waypoints_y_vals.size());
+          auto coeffs = polyfit(waypoints_x_eigen, waypoints_y_eigen, 3);
+
+          double cte = polyeval(coeffs, px) - py;
+          double epsi = psi - atan(coeffs[1]);
+
+          Eigen::VectorXd state(6);
+          state << 0, 0, 0, v, cte, epsi;
+
+          auto vars = mpc.Solve(state, coeffs);
+
+          // Dividing by deg2rad(25) to keep the value in [-1, 1]
+          double steer_value = vars[0];
+          double throttle_value = vars[1];
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
-          msgJson["steering_angle"] = steer_value;
+          msgJson["steering_angle"] = steer_value / deg2rad(25);
           msgJson["throttle"] = throttle_value;
 
-          //Display the MPC predicted trajectory 
+          //Display the MPC predicted trajectory
           vector<double> mpc_x_vals;
           vector<double> mpc_y_vals;
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Green line
+
+          // First 2 points are the actuator values
+          for (int i = 2; i < vars.size() - 1; i += 2) {
+            mpc_x_vals.push_back(vars[i]);
+            mpc_y_vals.push_back(vars[i + 1]);
+          }
 
           msgJson["mpc_x"] = mpc_x_vals;
           msgJson["mpc_y"] = mpc_y_vals;
@@ -123,6 +154,10 @@ int main() {
 
           //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
           // the points in the simulator are connected by a Yellow line
+          for (int i = 0; i < waypoints_x_vals.size(); ++i) {
+            next_x_vals.push_back(waypoints_x_vals[i]);
+            next_y_vals.push_back(waypoints_y_vals[i]);
+          }
 
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
