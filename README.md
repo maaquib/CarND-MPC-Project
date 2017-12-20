@@ -21,7 +21,13 @@ Using the above set of model equations we can provide the system with actuator v
 ### Timestep Length and Elapsed Duration (N & dt)
 The values chosen for Timestep Length are `N = 10` and for Elapsed Duration `dt = 0.1`.
 
-I tried using `N = 15` but did not see much improvement so decided to stick with N = 10. Using a value smaller than 0.1 dt (`dt = 0.05`) caused larger oscillations around the track center with the vehicle rolling over the curb at times. Although, I believe modifying the cost factor multipliers would have led to a better performance, I did not explore this further in the interest of time.
+I tried using `N = 15` but did not see much improvement at the cost of additional computation, so decided to stick with N = 10. Using a value smaller than 0.1 dt (`dt = 0.05`) caused larger oscillations around the track center with the vehicle rolling over the curb at times. Although, I believe modifying the cost factor multipliers would have led to a better performance, I did not explore this further in the interest of time.
+
+Using a smaller `dt` value is preferable since it would give finer resolution for the vehicle trajectory. However, having too small a value would mean computational overhead and predictions which are a bit too responsive to changes.
+
+Having a small N may lead to prediction which may lack continuity and smoothness. On the flip side, having a large N can not only cause higher computational latency, it would also not make much sense to predict actuator values for too far ahead in time. Since this is not a dynamic model, predicted values too far ahead in the future would be fairly inaccurate.
+
+Shorter time horizon (`N * dt`) would lead to less accurate predictions although it would be more responsive to turns. On the flip side, a longer time horizon the drive would be smoother but less responsive to turns.
 
 ### Polynomial Fitting and MPC Preprocessing
 Before fitting the polynomials, there is preprocessing that is done on the provided waypoints. Since the waypoints are in map perspective, they are transformed to vehicle perspective using the approach described [here](https://discussions.udacity.com/t/waypoints-going-crazy/270597/2).
@@ -38,10 +44,25 @@ for (int i = 0; i < ptsx.size(); ++i) {
 Following this, a third order polynomial is fitted (`polyfit` function) through the transformed waypoints and the `coeffs` obtained are used to predict the error in actual and reference trajectories. The initial state vector is then constructed and used for MPC processing.
 
 ### Model Predictive Control with Latency
-To deal with latency in applying actuator controls to the vehicle (100ms), I implemented the suggestion provided [here](https://discussions.udacity.com/t/how-to-take-into-account-latency-of-the-system/248671/2). Rather than applying the current actuator control values, their is a delay introduced artificially by applying the actuator values from an older timestep. This makes the vehicle handle latency in correctly.
+To deal with latency in applying actuator controls to the vehicle (100ms), I used the kinematic model equations to predict the state after the latency period.
+
+```cpp
+double delta = j[1]["steering_angle"];
+double throttle = j[1]["throttle"];
+
+delta *= -1;
+px = v * cos(delta) * latency;
+py = v * sin(delta) * latency;
+cte += v * sin(epsi) * latency;
+epsi += v * delta * latency / Lf;
+psi = v * delta * latency / Lf;
+v += throttle * latency;
+```
+
+This new state is then sent to the MPC controller for getting the actuator values. This makes the vehicle handle latency correctly.
 
 ### Screen Recording of Lap
-[![MPC-Project](http://img.youtube.com/vi/0q3NUuvYhmQ/0.jpg)](http://www.youtube.com/watch?v=0q3NUuvYhmQ "MPC-Project")
+[![MPC-Project](http://img.youtube.com/vi/Wgb2rAFL2Ck/0.jpg)](http://www.youtube.com/watch?v=Wgb2rAFL2Ck "MPC-Project")
 
 ---
 

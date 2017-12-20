@@ -91,6 +91,8 @@ int main() {
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
+          double delta = j[1]["steering_angle"];
+          double throttle = j[1]["throttle"];
 
           /*
           * Calculate steering angle and throttle using MPC.
@@ -114,11 +116,24 @@ int main() {
           Eigen::Map<Eigen::VectorXd> waypoints_y_eigen(&waypoints_y_vals[0], waypoints_y_vals.size());
           auto coeffs = polyfit(waypoints_x_eigen, waypoints_y_eigen, 3);
 
-          double cte = polyeval(coeffs, px) - py;
-          double epsi = psi - atan(coeffs[1]);
+          // px, py and psi are = 0 in vehicle coordinates
+          double cte = polyeval(coeffs, 0);
+          double epsi = -atan(coeffs[1]);
 
           Eigen::VectorXd state(6);
-          state << 0, 0, 0, v, cte, epsi;
+
+          double latency = 0.1;
+          double Lf = 2.67;
+
+          delta *= -1;
+          px = v * cos(delta) * latency;
+          py = v * sin(delta) * latency;
+          cte += v * sin(epsi) * latency;
+          epsi += v * delta * latency / Lf;
+          psi = v * delta * latency / Lf;
+          v += throttle * latency;
+
+          state << px, py, psi, v, cte, epsi;
 
           auto vars = mpc.Solve(state, coeffs);
 
