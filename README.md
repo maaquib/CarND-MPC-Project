@@ -1,5 +1,47 @@
-# CarND-Controls-MPC
+# CarND-Controls-MPC ![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)
 Self-Driving Car Engineer Nanodegree Program
+
+### The Model
+
+The kinematic model used in the project is the one described in the lessons and uses the vehicles position (`x, y`), orientation (`psi`) and velocity (`v`). Using these variables to construct a state vector we can predict where it will be in the future after timestep `dt`. Additionally, we also want to capture how errors affect the state of the vehicle. We include the cross track error (`cte`) and the orientation error (`epsi`) in the state, to minimize the difference between the actual and reference trajectories.
+
+```cpp
+x[t + 1] = x[t] + v[t] * cos(psi[t]) * dt;
+y[t + 1] = y[t] + v[t] * sin(psi[t]) * dt;
+psi[t + 1] = psi[t] - (v[t] / Lf) * delta[t] * dt;
+v[t + 1] = v[t] + a[t] * dt;
+cte[t + 1] = (f[t] - y[t]) + (v[t] * sin(epsi[t]) * dt);
+epsi[t + 1] = (psi[t] - psides[t]) - ((v[t] / Lf) * delta[t] * dt);
+```
+
+`L​f` measures the distance between the front of the vehicle and its center of gravity in our `psi` and `cte` equations. Since the perception of rotation in the simulator is reversed, we use `- Lf` instead of what was provided (`+ Lf`) as part of the model equations in the lessons.
+
+Using the above set of model equations we can provide the system with actuator values to control and change the state of the vehicle.
+
+### Timestep Length and Elapsed Duration (N & dt)
+The values chosen for Timestep Length are `N = 10` and for Elapsed Duration `dt = 0.1`.
+
+I tried using `N = 15` but did not see much improvement so decided to stick with N = 10. Using a value smaller than 0.1 dt (`dt = 0.05`) caused larger oscillations around the track center with the vehicle rolling over the curb at times. Although, I believe modifying the cost factor multipliers would have led to a better performance, I did not explore this further in the interest of time.
+
+### Polynomial Fitting and MPC Preprocessing
+Before fitting the polynomials, there is preprocessing that is done on the provided waypoints. Since the waypoints are in map perspective, they are transformed to vehicle perspective using the approach described [here](https://discussions.udacity.com/t/waypoints-going-crazy/270597/2).
+
+```cpp
+for (int i = 0; i < ptsx.size(); ++i) {
+  waypoints_x_vals.push_back(cos(-psi) * (ptsx[i] - px)
+                        - sin(-psi) * (ptsy[i] - py));
+  waypoints_y_vals.push_back(sin(-psi) * (ptsx[i] - px)
+                        + cos(-psi) * (ptsy[i] - py));
+}
+```
+
+Following this, a third order polynomial is fitted (`polyfit` function) through the transformed waypoints and the `coeffs` obtained are used to predict the error in actual and reference trajectories. The initial state vector is then constructed and used for MPC processing.
+
+### Model Predictive Control with Latency
+To deal with latency in applying actuator controls to the vehicle (100ms), I implemented the suggestion provided [here](https://discussions.udacity.com/t/how-to-take-into-account-latency-of-the-system/248671/2). Rather than applying the current actuator control values, their is a delay introduced artificially by applying the actuator values from an older timestep. This makes the vehicle handle latency in correctly.
+
+### Screen Recording of Lap
+[![MPC-Project](http://img.youtube.com/vi/0q3NUuvYhmQ/0.jpg)](http://www.youtube.com/watch?v=0q3NUuvYhmQ "MPC-Project")
 
 ---
 
